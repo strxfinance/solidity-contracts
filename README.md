@@ -8,5 +8,5 @@ Only TRX (TRON Blockchain) is presently supported by  for liquid staking.
 
 ### Deployments
 #### Mainnet
-- STRX Token : https://tronscan.io/#/contract/TVGiaML3hJE7sv9NEEVjqLbF5DcXJgHSfy/code
+- SFI Token : https://tronscan.io/#/contract/TVGiaML3hJE7sv9NEEVjqLbF5DcXJgHSfy/code
 - StakingPool : https://tronscan.io/#/contract/TGrdCu9fu8csFmQptVE25fDzFmPU9epamH/code
