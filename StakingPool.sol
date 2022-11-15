@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.6;
+pragma solidity = 0.8.11;
 
 /// @title SafeMath Library
 /// @author OpenZeppelin
@@ -24,10 +24,10 @@ library SafeMath {
     }
 }
 
-/// @title STRX Token Interface
+/// @title SFI Token Interface
 /// @author STRXFinance
-/// @dev The TRC20 Interface has been upgraded to include the mintSTRX and burnSTRX capabilities.
-interface ISTRX {
+/// @dev The TRC20 Interface has been upgraded to include the mintSFI and burnSFI capabilities.
+interface ISFI {
     
     event Transfer(address indexed from, address indexed to, uint256 value);
 
@@ -55,16 +55,16 @@ interface ISTRX {
         uint256 amount
     ) external returns (bool);
 
-    function mintSTRX(address to, uint strx) external payable;
+    function mintSFI(address to, uint sfi) external payable;
 
-    function burnSTRX(address from, uint strx) external;
+    function burnSFI(address from, uint sfi) external;
 
 }
 
 /// @title StakingPool Contract
 /// @author STRXFinance
 /// @notice resourceManager should be a multisig wallet that users can rely on.
-/// @dev Based on backed TRX, the Staking Pool mints/burns STRX and generates revenue for the STRX holders.
+/// @dev Based on backed TRX, the Staking Pool mints/burns SFI and generates revenue for the SFI holders.
 contract StakingPool {
     ///@dev Using SafeMath Library on all uint256 types
     using SafeMath for uint256;
@@ -91,11 +91,11 @@ contract StakingPool {
     ///@dev This tracks the total amount of trx that the resourceManager has borrowed.
     uint256 public trxLentToManager;
 
-    ///@dev A MultiSig EOA called resourceManager borrows TRX from contacts in order to generate revenue for STRX Holders.
+    ///@dev A MultiSig EOA called resourceManager borrows TRX from contacts in order to generate revenue for SFI Holders.
     address payable public resourceManager;
 
-    ///@dev The STRX Contract, or STRX, is what will be used to mint and burn STRX.
-    ISTRX public immutable STRX;
+    ///@dev The SFI Contract, or SFI, is what will be used to mint and burn SFI.
+    ISFI public immutable SFI;
 
     ///@dev Only the authorised EOA may borrow TRX from the contract thanks to this modifier, which limits function calls to only resourceManager for the borrowTRX function.
     modifier onlyResourceManager() {
@@ -103,21 +103,21 @@ contract StakingPool {
         _;
     }
 
-    ///@dev Staking Pool Contract Creation Using an Immutable STRX Token
-    ///@notice In order to prevent this pool's UnderlyingTrx from ever reaching 0, we must first mint 1 STRX and send it to an inaccessible wallet.
-    constructor(address STRX_ADDRESS) {
+    ///@dev Staking Pool Contract Creation Using an Immutable SFI Token
+    ///@notice In order to prevent this pool's UnderlyingTrx from ever reaching 0, we must first mint 1 SFI and send it to an inaccessible wallet.
+    constructor(address SFI_ADDRESS) {
         resourceManager = payable(msg.sender);
-        STRX = ISTRX(STRX_ADDRESS);
+        SFI = ISFI(SFI_ADDRESS);
     }
     
     ///@dev This event gets emitted on every new stake
-    event Staked(address user, uint256 trxStaked, uint256 strxMinted);
+    event Staked(address user, uint256 trxStaked, uint256 sfiMinted);
     ///@dev This event gets emitted when someone unstaked
-    event Unstaked(address user, uint256 strxBurned, uint256 trxLocked, uint256 unlocksAfter);
+    event Unstaked(address user, uint256 sfiBurned, uint256 trxLocked, uint256 unlocksAfter);
     ///@dev This event gets emitted when someone claims their unstaked trx
     event Claimed(address user, uint256 trxClaimed);
-    ///@dev This event gets emitted when someone directly unstakes their strx without going through 3 days waiting period.
-    event EmergencyClaimed(address user, uint256 strxBurned, uint256 trxClaimed);
+    ///@dev This event gets emitted when someone directly unstakes their sfi without going through 3 days waiting period.
+    event EmergencyClaimed(address user, uint256 sfiBurned, uint256 trxClaimed);
     
     ///@dev This event gets emitted when revenue is generated on energy/bandwidth renting
     event IncomeGenerated(uint256 trxAmount, address from);
@@ -131,7 +131,7 @@ contract StakingPool {
     event ResourceManagerUpdated(address oldManager, address newManager);
 
     /**
-     * @dev Stakes msg.value TRX and mints STRX for the msg.sender
+     * @dev Stakes msg.value TRX and mints SFI for the msg.sender
      *
      * Returns Null
      *
@@ -139,13 +139,13 @@ contract StakingPool {
      */
     function stake() external payable {
         require(msg.value > 0, "0 TRX");
-        uint256 _strx = ( msg.value.mul(STRX.totalSupply()) ).div( reservedTRX().sub(msg.value) );
-        emit Staked(msg.sender, msg.value, _strx);
-        STRX.mintSTRX(msg.sender, _strx);
+        uint256 _sfi = ( msg.value.mul(SFI.totalSupply()) ).div( reservedTRX().sub(msg.value) );
+        emit Staked(msg.sender, msg.value, _sfi);
+        SFI.mintSFI(msg.sender, _sfi);
     }
 
     /**
-     * @dev Mints strx at the rate of 1:1 when STRX total supply === 0, This is called only for 1 time, after deploying the contract
+     * @dev Mints sfi at the rate of 1:1 when SFI total supply === 0, This is called only for 1 time, after deploying the contract
      *
      * Returns Null
      *
@@ -153,36 +153,36 @@ contract StakingPool {
      */
     function emInit(address blackHoleAddress) external payable onlyResourceManager() {
         require(msg.value > 0, "0 TRX");
-        require(STRX.totalSupply() == 0, "Already Initialized");
+        require(SFI.totalSupply() == 0, "Already Initialized");
         emit Staked(blackHoleAddress, msg.value, msg.value);
-        STRX.mintSTRX(blackHoleAddress, msg.value);
+        SFI.mintSFI(blackHoleAddress, msg.value);
     }
     
     /**
-     * @dev Checks for pendingClaim for user if any, and claim it for the user, then unstake given strx for TRX, which gets locked as pendingClaim for the user for next 3 days
+     * @dev Checks for pendingClaim for user if any, and claim it for the user, then unstake given sfi for TRX, which gets locked as pendingClaim for the user for next 3 days
      *
      * Returns Null
      *
      * Emits {Claimed and/or Unstaked} event.
      */
-    function unstake(uint256 strx) external {
-        require(strx > 0, "0 strx");
-        uint256 newPendingClaim = ( strx.mul(reservedTRX()) ).div( STRX.totalSupply() );
+    function unstake(uint256 sfi) external {
+        require(sfi > 0, "0 sfi");
+        uint256 newPendingClaim = ( sfi.mul(reservedTRX()) ).div( SFI.totalSupply() );
         if ( userPendingClaim[msg.sender] > 0 && block.timestamp >= userUnlockTime[msg.sender] && address(this).balance >= userPendingClaim[msg.sender] ) {
             uint256 oldPendingClaim = userPendingClaim[msg.sender];
             totalPendingClaim = totalPendingClaim.sub(oldPendingClaim).add(newPendingClaim);
             userPendingClaim[msg.sender] = newPendingClaim;
             userUnlockTime[msg.sender] = block.timestamp.add(unstakingPeriod);
             emit Claimed(msg.sender, oldPendingClaim);
-            emit Unstaked(msg.sender, strx, newPendingClaim, userUnlockTime[msg.sender]);
-            STRX.burnSTRX(msg.sender, strx);
+            emit Unstaked(msg.sender, sfi, newPendingClaim, userUnlockTime[msg.sender]);
+            SFI.burnSFI(msg.sender, sfi);
             payable(msg.sender).transfer(oldPendingClaim);
         } else {
             totalPendingClaim = totalPendingClaim.add(newPendingClaim);
             userPendingClaim[msg.sender] = userPendingClaim[msg.sender].add(newPendingClaim);
             userUnlockTime[msg.sender] = block.timestamp.add(unstakingPeriod);
-            emit Unstaked(msg.sender, strx, newPendingClaim, userUnlockTime[msg.sender]);
-            STRX.burnSTRX(msg.sender, strx);
+            emit Unstaked(msg.sender, sfi, newPendingClaim, userUnlockTime[msg.sender]);
+            SFI.burnSFI(msg.sender, sfi);
         }
     }
     
@@ -212,12 +212,12 @@ contract StakingPool {
      *
      * Emits an {EmergencyClaimed} event.
      */
-    function emergencyClaim(uint256 strx) external {
-        uint256 newPendingClaim = strx.mul( reservedTRX() ).mul( emergencyFeesDenominator.sub(emergencyFeesNumerator) ).div( emergencyFeesDenominator ).div( STRX.totalSupply() );
-        require(address(this).balance >= newPendingClaim, "Insufficient TRX");
-        emit EmergencyClaimed(msg.sender, strx, newPendingClaim);
-        STRX.burnSTRX(msg.sender, strx);
-        payable(msg.sender).transfer(newPendingClaim);
+    function emergencyClaim(uint256 sfi) external {
+        uint256 trxAmount = sfi.mul( reservedTRX() ).mul( emergencyFeesDenominator.sub(emergencyFeesNumerator) ).div( emergencyFeesDenominator ).div( SFI.totalSupply() );
+        require(address(this).balance >= trxAmount, "Insufficient TRX");
+        emit EmergencyClaimed(msg.sender, sfi, trxAmount);
+        SFI.burnSFI(msg.sender, sfi);
+        payable(msg.sender).transfer(trxAmount);
     }
 
     /**
@@ -240,11 +240,11 @@ contract StakingPool {
     *
     * Emits a {BorrowedTRX} event.
     */
-    function emBorrowTRX(uint256 newPendingClaim, string calldata reason) external onlyResourceManager() {
-        trxLentToManager = trxLentToManager.add(newPendingClaim);
-        require(address(this).balance.sub(totalPendingClaim) >= newPendingClaim, "Insufficient TRX");
-        emit BorrowedTRX(newPendingClaim, resourceManager, reason);
-        resourceManager.transfer(newPendingClaim);
+    function emBorrowTRX(uint256 trxAmount, string calldata reason) external onlyResourceManager() {
+        trxLentToManager = trxLentToManager.add(trxAmount);
+        require(address(this).balance.sub(totalPendingClaim) >= trxAmount, "Insufficient TRX");
+        emit BorrowedTRX(trxAmount, resourceManager, reason);
+        resourceManager.transfer(trxAmount);
     }
 
     /**
